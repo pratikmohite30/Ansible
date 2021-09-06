@@ -1,0 +1,28 @@
+#Playbook Execution syntax:
+# Note: ansible-plybook -i inventories/hosts Playbook_Cisco_write_mem_with_config_backup.yml
+
+---
+  - name: "Config backup from Ansible"
+    hosts: R1
+    gather_facts: true
+    connection: network_cli
+    vars:
+        date: "{{ lookup('pipe', 'date +%Y-%m-%d_%H:%M:%S') }}"
+        ansible_network_os: ios
+    vars_files:
+      - /etc/ansible/My_playbooks/inventories/group_vars/ios.yml
+
+    tasks:
+      - name: write memory
+        ios_command:
+          commands:
+             -  write memory
+      - name: show run
+        ios_command:
+          commands:
+             -  show run
+        register:  config
+      - name: save output to /etc/ansible/backup
+        copy:
+          content:  "{{ config.stdout[0] }}"
+          dest: "/etc/ansible/backup/show_run_{{ inventory_hostname }}_{{ date }}.txt"
