@@ -9,8 +9,6 @@
     gather_facts: true
 
     vars:
-      - ansible_user: admin
-      - ansible_ssh_pass: XXXXXXX
       - ansible_become: yes
       - ansible_become_password: XXXXXXX
       - client_name: "{{Customer_name}}"
