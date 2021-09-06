@@ -10,9 +10,9 @@
 
     vars:
       - ansible_user: admin
-      - ansible_ssh_pass: Cisco@123
+      - ansible_ssh_pass: XXXXXXX
       - ansible_become: yes
-      - ansible_become_password: Cisco@123
+      - ansible_become_password: XXXXXXX
       - client_name: "{{Customer_name}}"
       - client_encryption_ip: "{{Customer_encryption_ip}}"
       - client_peer_ip: "{{ Customer_peer_ip }}"
