@@ -1,0 +1,137 @@
+#Playbook Execution syntax with Customer VPN Parameters
+#ansible-playbook -i /etc/ansible/hosts -e "Customer_name=ABC-LABS Customer_encryption_ip=5.5.5.5 Customer_peer_ip=6.6.6.6 Tunnel_Preshared_key=xyz Free_Crypto_map_numer=100 Phase2_Lifetime=86400 Phase2_PFS_Group=2" ASA_S2S_Tunnel_IKEv1.yml
+
+#Site-2-Site ikev1 VPN on ASA
+---
+  - name: Site-2-Site Payroll VPN Tunnel ikev1 on ASA
+    hosts: ASA2
+    connection: network_cli
+    gather_facts: true
+
+    vars:
+      - ansible_user: admin
+      - ansible_ssh_pass: Cisco@123
+      - ansible_become: yes
+      - ansible_become_password: Cisco@123
+      - client_name: "{{Customer_name}}"
+      - client_encryption_ip: "{{Customer_encryption_ip}}"
+      - client_peer_ip: "{{ Customer_peer_ip }}"
+      - client_preshared_key: "{{ Tunnel_Preshared_key }}"
+      - crypto_map_number: "{{ Free_Crypto_map_numer }}"
+      - IPsec_Lifetime: "{{ Phase2_Lifetime }}"
+      - pfs_group: "{{ Phase2_PFS_Group }}"
+
+    tasks:
+#############Define IKEv1 Policy#############
+      - name: Crypto IKEv1 policy
+        asa_config:
+          lines:
+            - authentication pre-share
+            - encryption aes-256
+            - hash sha
+            - group 2
+            - lifetime 86400
+          parents:
+            - crypto ikev1 policy 5
+
+#############Define IPSec Transform Set#############
+      - name: Crypto IPSEC IKEv1 Transform set
+        asa_config:
+          lines:
+            - crypto ipsec ikev1 transform-set ESP-AES-256-SHA esp-aes-256 esp-sha-hmac
+
+#Below task is to cross-check if any configuration is persent for this VPN Customer
+      - name: Show Existing configuration for New Customer Peer & Encryption IP
+        asa_command:
+          commands:
+            - show run | include {{ client_encryption_ip }}
+            - show run | include {{ client_peer_ip }}
+            - show run crypto map | include {{ crypto_map_number }}
+            - show run | include {{ client_name }}
+        register: result
+
+      - name: Print result
+        debug:
+          var: result.stdout_lines
+
+      - name: Existing config check
+        fail:
+          msg: "Failed - Because Customer configuration is already present"
+        when: ("network-object host" in result.stdout[0]) or ("tunnel-group" in result.stdout[1]) or ("crypto map CRYPMAP_OUTSIDE" in result.stdout[2]) or ("CUSTOMER_" in result.stdout[3])
+
+
+#############Object-group creation for Customer Encryption-IP#############
+      - name: Create Customer Encryption IP Object-group
+        asa_config:
+          parents:
+            - object-group network CUSTOMER_{{ client_name }}
+          lines:
+            - description {{ client_name }} Encryption-IP
+            - network-object host {{ client_encryption_ip }}
+
+#############Define ACL to match interesting traffic#############
+      - name: Create Access-list for customer
+        asa_config:
+          lines:
+            - access-list VPN_CUSTOMER-{{ client_name }} extended permit ip object-group SERVICE_PROVIDER_ENCRYPTION-IP object-group CUSTOMER_{{ client_name }}
+            - access-list VPN-FILTER_CUSTOMER-{{ client_name }} extended permit tcp object-group CUSTOMER_{{ client_name }} object-group SERVICE_PROVIDER_ENCRYPTION-IP object-group TCP_FILTERS
+            - access-list VPN-FILTER_CUSTOMER-{{ client_name }} extended permit icmp object-group CUSTOMER_{{ client_name }} object-group SERVICE_PROVIDER_ENCRYPTION-IP object-group ICMP
+            - access-list VPN-FILTER_CUSTOMER-{{ client_name }} extended permit tcp object-group CUSTOMER_{{ client_name }} object-group TCP_FILTERS object-group SERVICE_PROVIDER_ENCRYPTION-IP
+
+#############Define Group Policy#############
+      - name: Create Customer Group Policy internal
+        asa_config:
+          lines:
+            - group-policy VPNGP_CUSTOMER-{{ client_name }} internal
+
+      - name: Create Customer Group Policy attribute for ikev1
+        asa_config:
+          parents:
+            - group-policy VPNGP_CUSTOMER-{{ client_name }} attributes
+          lines:
+            - vpn-filter value VPN-FILTER_CUSTOMER-{{ client_name }}
+            - vpn-tunnel-protocol ikev1
+
+#############Define Tunnel Group and define PSK#############
+      - name: Create Customer Tunnel Group Type
+        asa_config:
+          lines:
+            - tunnel-group {{ client_peer_ip }} type ipsec-l2l
+
+      - name: Create Customer Tunnel Group ikev1 Preshared Key
+        asa_config:
+          parents:
+            - tunnel-group {{ client_peer_ip }} ipsec-attributes
+          lines:
+            - ikev1 pre-shared-key {{ client_preshared_key }}
+
+      - name: Create Customer Tunnel Group general-attributes
+        asa_config:
+          parents:
+            - tunnel-group {{ client_peer_ip }} general-attributes
+          lines:
+            - default-group-policy VPNGP_CUSTOMER-{{ client_name }}
+
+
+#############Define Crypto Map#############
+      - name: Create Crypto map
+        asa_config:
+          lines:
+            - crypto map CRYPMAP_OUTSIDE {{ crypto_map_number }} match address VPN_CUSTOMER-{{ client_name }}
+            - crypto map CRYPMAP_OUTSIDE {{ crypto_map_number }} set peer {{ client_peer_ip }}
+            - crypto map CRYPMAP_OUTSIDE {{ crypto_map_number }} set security-association lifetime seconds {{ IPsec_Lifetime }}
+            - crypto map CRYPMAP_OUTSIDE {{ crypto_map_number }} set security-association lifetime kilobytes 1152000
+            - crypto map CRYPMAP_OUTSIDE {{ crypto_map_number }} set pfs group{{ pfs_group }}
+            - crypto map CRYPMAP_OUTSIDE {{ crypto_map_number }} set ikev1 transform-set ESP-AES-256-SHA
+
+#############Enable IKEv1 on the OUTSIDE interface (Eg. - WAN)#############
+      - name: Enable IEKv1 on OUTSIDE interface
+        asa_config:
+          lines:
+            - crypto ikev1 enable WAN
+
+#############Enable Crypto map on the OUTSIDE interface (Eg. - WAN & CRYPMAP_OUTSIDE)#############
+      - name: Enable Crypto Map on OUTSIDE interface
+        asa_config:
+          lines:
+            - crypto map CRYPMAP_OUTSIDE interface WAN
