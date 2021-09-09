@@ -1,0 +1,72 @@
+#Playbook Execution syntax with Customer VPN Parameters
+#ansible-playbook -i /etc/ansible/hosts -e "Customer_name=PQR-LABS Customer_peer_ip=22.22.22.2 Loacl_peer_ip=11.11.11.2 Customer_encryption_ip=192.168.150.1 Local_encryption_ip=192.168.100.1 Tunnel_Preshared_key=xyz Free_Crypto_map_numer=10 Phase2_Lifetime=86400 Phase2_PFS_Group=2" Cisco_Router_S2S_Tunnel_IKEv1.yml
+
+---
+  - name: Site-2-Site Payroll VPN Tunnel ikev1 on Cisco Router
+    hosts: R3
+    gather_facts: true
+    connection: network_cli
+
+    vars:
+      - client_name: "{{Customer_name}}"
+      - client_encryption_ip: "{{Customer_encryption_ip}}"
+      - local_encryption_ip: "{{Local_encryption_ip}}"
+      - client_peer_ip: "{{ Customer_peer_ip }}"
+      - local_peer_ip: "{{ Loacl_peer_ip }}"
+      - client_preshared_key: "{{ Tunnel_Preshared_key }}"
+      - crypto_map_number: "{{ Free_Crypto_map_numer }}"
+      - IPsec_Lifetime: "{{ Phase2_Lifetime }}"
+      - pfs_group: "{{ Phase2_PFS_Group }}"
+
+    tasks:
+#############Define ISAKMP policy#############
+      - name: Create an ISAKMP policy
+        ios_config:
+          lines:
+            - authentication pre-share
+            - encryption aes 256
+            - hash sha
+            - group 2
+            - lifetime 3600
+          parents:
+            - crypto isakmp policy 7
+
+#############Define IPSec Transform Set#############
+      - name: Crypto IPSEC IKEv1 Transform set
+        ios_config:
+          lines:
+            - crypto ipsec transform-set IPSEC-TS esp-aes 256 esp-sha-hmac
+
+#############Define PSK and peer/customer address#############
+      - name: Create Customer ikev1 Preshared Key
+        ios_config:
+          lines:
+            - crypto isakmp key {{ client_preshared_key }} address {{ client_peer_ip }}
+
+#############Define ACL to match interesting traffic#############
+      - name: ACL configyration for interesting traffic
+        ios_config:
+          lines:
+            - permit ip host {{ client_encryption_ip }} host {{ local_encryption_ip }}
+            - permit ip host {{ local_encryption_ip }} host {{ client_encryption_ip }}
+
+          parents: ip access-list extended VPN-CUSTOMER-{{ client_name }}
+
+#############Define Crypto Map#############
+      - name: Create Crypto map
+        ios_config:
+          lines:
+            - match address VPN-CUSTOMER-{{ client_name }}
+            - set peer {{ client_peer_ip }}
+            - set security-association lifetime seconds {{ IPsec_Lifetime }}
+            - set pfs group{{ pfs_group }}
+            - set transform-set IPSEC-TS
+          parents:
+            - crypto map CRYPTOMAP_OUTSIDE {{ crypto_map_number }} ipsec-isakmp
+
+#############Enable Crypto map on the OUTSIDE interface (Eg. - GigabitEthernet0/1)#############
+      - name: Enable Crypto Map on OUTSIDE interface
+        ios_config:
+          parents: "interface GigabitEthernet0/1"
+          lines:
+            -  crypto map CRYPTOMAP_OUTSIDE
