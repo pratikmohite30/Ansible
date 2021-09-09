@@ -1,0 +1,39 @@
+---
+  - name: Interface configuration through Ansible
+    hosts: routers
+    gather_facts: true
+    connection: network_cli
+
+    tasks:
+      - name: Clock & Interface GigabitEthernet2 configuration
+        ios_command:
+          commands:
+            - show clock
+            - show run interface GigabitEthernet2
+        register: output
+      - name: Print register-Interface output
+        debug:
+          var: output.stdout_lines
+
+      - name: Interface GigabitEthernet2
+        ios_config:
+          parents: "interface GigabitEthernet2"
+          lines:
+            - ip address 10.10.10.2 255.255.255.0
+            - no shut
+            - description Configured by Ansible
+
+      - name: Clock & Interface GigabitEthernet2 configuration
+        ios_command:
+          commands:
+            - show clock
+            - show run interface GigabitEthernet2
+        register: output
+      - name: Print register-Interface output
+        debug:
+          var: output.stdout_lines        
+
+      - name: Write memory
+        ios_command:
+          commands:
+            - write memory
