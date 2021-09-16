@@ -1,0 +1,101 @@
+#Playbook Execution syntax with Customer VPN Parameters
+#ansible-playbook -i /etc/ansible/hosts -e "Customer_name=HO-LABS Customer_peer_ip=100.100.100.2 Loacl_peer_ip=99.99.99.2 Customer_encryption_ip=192.168.250.2 Local_encryption_ip=192.168.254.1 Tunnel_Preshared_key=Cisco@123 Free_Crypto_map_numer=100 Phase2_Lifetime=8600 Phase2_PFS_Group=14" Cisco_Router_S2S_Tunnel_IKEv2.yml
+---
+  - name: Site-2-Site Payroll VPN Tunnel ikev1 on Cisco Router
+    hosts: R3
+    gather_facts: true
+    connection: network_cli
+
+    vars:
+      - client_name: "{{Customer_name}}"
+      - client_encryption_ip: "{{Customer_encryption_ip}}"
+      - local_encryption_ip: "{{Local_encryption_ip}}"
+      - client_peer_ip: "{{ Customer_peer_ip }}"
+      - local_peer_ip: "{{ Loacl_peer_ip }}"
+      - client_preshared_key: "{{ Tunnel_Preshared_key }}"
+      - crypto_map_number: "{{ Free_Crypto_map_numer }}"
+      - IPsec_Lifetime: "{{ Phase2_Lifetime }}"
+      - pfs_group: "{{ Phase2_PFS_Group }}"
+
+    tasks:
+#############Define IKEv2 Keyring#############
+      - name: Create Customer IKEv2 Keyring
+        ios_config:
+          lines:
+           - peer Customer-{{ client_name }}
+          after:
+            - address {{ client_peer_ip }}
+            - pre-shared-key {{ client_preshared_key }}
+          parents:
+            - crypto ikev2 keyring Customer-{{ client_name }}
+
+#############Define IKEv2 Proposal#############
+      - name: Create IKEv2 Proposal
+        ios_config:
+          lines:
+            - encryption aes-cbc-256
+            - integrity sha256
+            - group 14
+
+          parents:
+            - crypto ikev2 proposal IKEv2-PROP-AES256-SHA256
+
+#############Define IKEv2 Profiles#############
+      - name: Create IKEv2 Profile
+        ios_config:
+          lines:
+            - match identity remote address {{ client_peer_ip }}
+            - identity local address {{ local_peer_ip }}
+            - authentication local pre-share
+            - authentication remote pre-share
+            - keyring local Customer-{{ client_name }}
+            - lifetime 3600
+
+          parents:
+            - crypto ikev2 profile IKEV2-PROF-Customer-{{ client_name }}
+
+#############Define IKEv2 Policy#############
+      - name: Create IKEv2 Policy
+        ios_config:
+          lines:
+            - proposal IKEv2-PROP-AES256-SHA256
+
+          parents:
+            - crypto ikev2 policy IKEV2-POL-Customer-{{ client_name }}
+
+#############Define IPSec Transform Set#############
+      - name: Crypto IPSEC IKEv2 Transform set
+        ios_config:
+          lines:
+            - crypto ipsec transform-set IPSEC-TS esp-aes 256 esp-sha256-hmac
+
+#############Define ACL to match interesting traffic#############
+      - name: ACL configyration for interesting traffic
+        ios_config:
+          lines:
+            - permit ip host {{ client_encryption_ip }} host {{ local_encryption_ip }}
+            - permit ip host {{ local_encryption_ip }} host {{ client_encryption_ip }}
+            - permit ip host {{ client_peer_ip }} host {{ local_peer_ip }}
+            - permit ip host {{ local_peer_ip }} host {{ client_peer_ip }}
+
+          parents: ip access-list extended VPN-CUSTOMER-{{ client_name }}
+
+#############Define Crypto Map#############
+      - name: Create Crypto map
+        ios_config:
+          lines:
+            - match address VPN-CUSTOMER-{{ client_name }}
+            - set peer {{ client_peer_ip }}
+            - set security-association lifetime seconds {{ IPsec_Lifetime }}
+            - set ikev2-profile IKEV2-PROF-Customer-{{ client_name }}
+            - set pfs group{{ pfs_group }}
+            - set transform-set IPSEC-TS
+          parents:
+            - crypto map CRYPTOMAP_OUTSIDE {{ crypto_map_number }} ipsec-isakmp
+
+#############Enable Crypto map on the OUTSIDE interface (Eg. - GigabitEthernet0/0)#############
+      - name: Enable Crypto Map on OUTSIDE interface
+        ios_config:
+          parents: "interface GigabitEthernet0/0"
+          lines:
+            -  crypto map CRYPTOMAP_OUTSIDE
