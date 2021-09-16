@@ -1,6 +1,3 @@
-#Playbook Execution syntax with Customer VPN Parameters
-#ansible-playbook -i /etc/ansible/hosts -e "Customer_name=XYZ-LABS Customer_encryption_ip=9.9.9.9 Customer_peer_ip=10.10.10.10 Tunnel_Preshared_key=xyz Free_Crypto_map_numer=200 Phase2_Lifetime=3600 Phase2_PFS_Group=14" ASA_S2S_Tunnel_IKEv2.yml
-
 #Site-2-Site ikev2 VPN on ASA
 ---
   - name: Site-2-Site Payroll VPN Tunnel ikev2 on ASA
