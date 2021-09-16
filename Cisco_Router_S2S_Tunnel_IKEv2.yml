@@ -74,8 +74,6 @@
           lines:
             - permit ip host {{ client_encryption_ip }} host {{ local_encryption_ip }}
             - permit ip host {{ local_encryption_ip }} host {{ client_encryption_ip }}
-            - permit ip host {{ client_peer_ip }} host {{ local_peer_ip }}
-            - permit ip host {{ local_peer_ip }} host {{ client_peer_ip }}
 
           parents: ip access-list extended VPN-CUSTOMER-{{ client_name }}
 
