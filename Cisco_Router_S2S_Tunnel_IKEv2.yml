@@ -1,5 +1,4 @@
-#Playbook Execution syntax with Customer VPN Parameters
-#ansible-playbook -i /etc/ansible/hosts -e "Customer_name=HO-LABS Customer_peer_ip=100.100.100.2 Loacl_peer_ip=99.99.99.2 Customer_encryption_ip=192.168.250.2 Local_encryption_ip=192.168.254.1 Tunnel_Preshared_key=Cisco@123 Free_Crypto_map_numer=100 Phase2_Lifetime=8600 Phase2_PFS_Group=14" Cisco_Router_S2S_Tunnel_IKEv2.yml
+#Site-2-Site ikev2 VPN on Routers
 ---
   - name: Site-2-Site Payroll VPN Tunnel ikev1 on Cisco Router
     hosts: R3
