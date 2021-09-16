@@ -41,25 +41,6 @@
           parents:
             - crypto ipsec ikev2 ipsec-proposal IKEv2-AES-GCM
 
-#Below task is to cross-check if any configuration is persent for this VPN Customer
-      - name: Show Existing configuration for New Customer Peer & Encryption IP
-        asa_command:
-          commands:
-            - show run | include {{ client_encryption_ip }}
-            - show run | include {{ client_peer_ip }}
-            - show run crypto map | include {{ crypto_map_number }}
-            - show run | include {{ client_name }}
-        register: result
-
-      - name: Print result
-        debug:
-          var: result.stdout_lines
-
-      - name: Existing config check
-        fail:
-          msg: "Failed - Because Customer configuration is already present"
-        when: ("network-object host" in result.stdout[0]) or ("tunnel-group" in result.stdout[1]) or ("crypto map CRYPMAP_OUTSIDE" in result.stdout[2]) or ("CUSTOMER_" in result.stdout[3])
-
 #############Object-group creation for Customer Encryption-IP#############
       - name: Create Customer Encryption IP Object-group
         asa_config:
