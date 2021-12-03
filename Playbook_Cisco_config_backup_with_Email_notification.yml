@@ -1,0 +1,33 @@
+---
+  - name: "Config backup from Ansible"
+    hosts: R1
+    gather_facts: true
+    connection: network_cli
+
+    vars:
+      - date: "{{ lookup('pipe', 'date +%Y-%m-%d_%H:%M:%S') }}"
+
+    tasks:
+      - name: Current running configuration
+        ios_command:
+           commands:
+              -  show run
+        register:  config
+
+      - name: save output to /etc/ansible/backup
+        copy:
+          content:  "{{ config.stdout[0] }}"
+          dest: "/etc/ansible/backup/show_run_{{ inventory_hostname }}_{{ date }}.txt"
+
+      - name: Sending an e-mail using XYZ SMTP server
+        mail:
+          host: smtp.xyz.com
+          port: 587
+          username: abc@xyz.com
+          password: XXXXXXX
+          from: abc@xyz.com
+          to: efg@xyz.com
+          subject: Backup File
+          body: This is an Email generated using Ansible after execution of config backup task.
+          attach: "/etc/ansible/backup/show_run_{{ inventory_hostname }}_{{ date }}.txt"
+        delegate_to: localhost
